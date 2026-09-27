@@ -12,6 +12,8 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Order.Field.Basic
 import Mathlib.Data.Real.Sqrt
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Coloring
+import Mathlib.Combinatorics.SimpleGraph.Finite
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Positivity
 set_option maxHeartbeats 400000
@@ -34,13 +36,22 @@ noncomputable def unionBoundSum (n : ℕ) (p : ℝ) (k : ℕ) : ℝ :=
 noncomputable def numTerms (C : ℝ) (n : ℕ) : ℕ :=
   Nat.floor (C * Real.sqrt (n : ℝ)) - 3
 
+open Classical in
 /-- The probability that the random graph $G(n,p)$ contains a non-3-colorable subset of
-size at most $C\sqrt{n}$. -/
-noncomputable def gnpNon3ColorableSmallSubsetProb (n : ℕ) (p : ℝ) (C : ℝ) : ℝ := by sorry
+size at most $C\sqrt{n}$: the $G(n,p)$-weight of all graphs on `Fin n`
+having a vertex set `S` with `|S| ≤ C√n` whose induced subgraph is not
+3-colorable. -/
+noncomputable def gnpNon3ColorableSmallSubsetProb (n : ℕ) (p : ℝ) (C : ℝ) : ℝ :=
+  ∑ G : SimpleGraph (Fin n),
+    if ∃ S : Finset (Fin n), (S.card : ℝ) ≤ C * Real.sqrt n ∧
+        ¬ (G.induce (S : Set (Fin n))).Colorable 3
+    then p ^ G.edgeFinset.card * (1 - p) ^ (n.choose 2 - G.edgeFinset.card)
+    else 0
 
 /-- The union-bound upper estimate: the probability of having a non-3-colorable subset of
 size $\leq C\sqrt{n}$ is bounded by the union-bound sum. -/
-theorem unionBound_upper_bound (n : ℕ) (p : ℝ) (C : ℝ) :
+theorem unionBound_upper_bound (n : ℕ) (p : ℝ) (C : ℝ)
+    (hp0 : 0 ≤ p) (hp1 : p ≤ 1) :
     gnpNon3ColorableSmallSubsetProb n p C ≤ unionBoundSum n p (numTerms C n) := by sorry
 
 /-- For $\alpha > 5/6$ and $p \leq n^{-\alpha}$, the union-bound sum vanishes as $n \to \infty$:
@@ -60,7 +71,12 @@ theorem small_subset_three_colorable
         gnpNon3ColorableSmallSubsetProb n p C < ε := by
   intro ε hε
   obtain ⟨N, hN⟩ := unionBoundSum_lt_of_large α hα C hC ε hε
-  exact ⟨N, fun n hn p hp hpn =>
-    lt_of_le_of_lt (unionBound_upper_bound n p C) (hN n hn p hp hpn)⟩
+  refine ⟨max N 1, fun n hn p hp hpn => ?_⟩
+  have hn1 : (1 : ℝ) ≤ n := by
+    exact_mod_cast le_trans (le_max_right N 1) hn
+  have hp1 : p ≤ 1 :=
+    hpn.trans (Real.rpow_le_one_of_one_le_of_nonpos hn1 (by linarith))
+  exact lt_of_le_of_lt (unionBound_upper_bound n p C hp hp1)
+    (hN n (le_trans (le_max_left N 1) hn) p hp hpn)
 
 end BoundedDiffLemma
